@@ -13,7 +13,7 @@ def mse(matrix1, matrix2):
         acc = (matrix1.astype("float") - matrix2.astype("float")) ** 2
         return np.sum(acc) / float(matrix1.shape[0] * matrix2.shape[1])
 
-    dimensions = matrix1.shape
+    dimensions = len(matrix1.shape)
     if dimensions == 3:
         total_mse = 0.
         for i in range(matrix1.shape[2]):
@@ -45,6 +45,7 @@ def psnr(matrix1, matrix2, maxValue=None):
             raise Exception('Expected float32 or  data type, got ' + im.dtype.name)
         with np.errstate(divide='ignore'):
             return 20 * log10((maxValue ** 2) / mse_result)
+
 
 def ssim(image1, image2):
     """Calculate the Structural Similarity (SSIM) index between two images
