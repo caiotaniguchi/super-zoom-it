@@ -138,133 +138,77 @@ def _calculate_p(rdf, dx, dy, wx, wy, nrows, ncols):
     # its points and the subwindow (D).
     # Each column of the P matrix represents a subwindow D.
 
-    # Center of the matrix - point with maximum value
-    center_line, center_column = np.unravel_index(rdf.argmax(), rdf.shape)
     # Number of images
     nimgs = len(dx)
     k = (nimgs * wx * wy) / (nrows * ncols)
 
     # Outer loop
     # Inner matrix (subwindow) - varies in the lines of the P matrix
-    pos_x = np.arange(ncols) + 1
-    pos_y = np.arange(nrows) + 1
+    m_pos_x = np.meshgrid(
+        mt.generate_and_flatten_grid(
+            np.arange(ncols) + 1 - np.fix((ncols + 1) / 2)
+        ),
+        np.zeros(k)
+    )[0]
+    m_pos_y = np.meshgrid(
+        mt.generate_and_flatten_grid(
+            np.arange(nrows) + 1 - np.fix((nrows + 1) / 2),
+            grid='Y'
+        ),
+        np.zeros(k)
+    )[0]
 
-    half_x = np.fix((ncols + 1) / 2)
-    half_y = np.fix((nrows + 1) / 2)
+    tmp_v = np.arange(k/nimgs) + 1
+    m_dx = np.meshgrid(
+        np.zeros(ncols * nrows),
+        mt.generate_and_flatten_grid(dx, tmp_v)
+    )[1]
+    m_dy = np.meshgrid(
+        np.zeros(ncols * nrows),
+        mt.generate_and_flatten_grid(dy, tmp_v)
+    )[1]
 
-    pos_x -= half_x
-    pos_y -= half_y
+    tmp_v1 = np.zeros(nimgs)
+    tmp_v2 = np.zeros(ncols * nrows)
 
-    v_pos_x = np.meshgrid(pos_x, pos_x)[0]
-    v_pos_y = np.meshgrid(pos_y, pos_y)[1]
-
-    # TODO TESTAR
-    v_pos_x = v_pos_x.T.reshape(v_pos_x.shape[0] * v_pos_x.shape[1])
-    v_pos_y = v_pos_x.T.reshape(v_pos_x.shape[0] * v_pos_x.shape[1])
-
-    m_pos_x = np.meshgrid(v_pos_x, np.zeros(k))[0]
-    m_pos_y = np.meshgrid(v_pos_y, np.zeros(k))[0]
-
-    v_dx = np.meshgrid(dx, np.arange(k/nimgs) + 1)[0]
-    v_dy = np.meshgrid(dy, np.arange(k/nimgs) + 1)[0]
-
-    v_dx = v_dx.T.reshape(v_dx.shape[0] * v_dx.shape[1])
-    v_dy = v_dy.T.reshape(v_dy.shape[0] * v_dy.shape[1])
-
-    m_dx = np.meshgrid(np.zeros(ncols * nrows), v_dx)[1]
-    m_dy = np.meshgrid(np.zeros(ncols * nrows), v_dy)[1]
-
-    w_pos_x = np.arange(wx/ncols) + 1
-    w_pos_y = np.arange(wy/nrows) + 1
-
-    half_x = np.fix((wx/ncols + 1) / 2)
-    half_y = np.fix((wy/nrows + 1) / 2)
-
-    w_pos_x = (w_pos_x - half_x) * ncols
-    w_pos_y = (w_pos_y - half_y) * nrows
-
-    v_w_pos_x = np.meshgrid(w_pos_x, w_pos_x)[0]
-    v_w_pos_y = np.meshgrid(w_pos_y, w_pos_y)[1]
-
-    v_w_pos_x = v_w_pos_x.T.reshape(v_w_pos_x.shape[0] * v_w_pos_x.shape[1])
-    v_w_pos_y = v_w_pos_y.T.reshape(v_w_pos_y.shape[0] * v_w_pos_y.shape[1])
-
-    c_pos_x = np.meshgrid(np.zeros(nimgs), v_w_pos_x)[1]
-    c_pos_y = np.meshgrid(np.zeros(nimgs), v_w_pos_y)[1]
-
-    c_pos_x = c_pos_x.T.reshape(c_pos_x.shape[0] * c_pos_x.shape[1])
-    c_pos_y = c_pos_y.T.reshape(c_pos_y.shape[0] * c_pos_y.shape[1])
-
-    m_c_pos_x = np.meshgrid(np.zeros(ncols * nrows), c_pos_x)[1]
-    m_c_pos_y = np.meshgrid(np.zeros(ncols * nrows), c_pos_y)[1]
+    m_c_pos_x = np.meshgrid(
+        tmp_v2,
+        mt.generate_and_flatten_grid(
+            tmp_v1, mt.generate_and_flatten_grid(
+                (np.arange(wx/ncols) + 1 - np.fix((wx/ncols + 1) / 2)) * ncols
+            ),
+            grid='Y'
+        )
+    )[1]
+    m_c_pos_y = np.meshgrid(
+        tmp_v2,
+        mt.generate_and_flatten_grid(
+            tmp_v1,
+            mt.generate_and_flatten_grid(
+                (np.arange(wy/nrows) + 1 - np.fix((wy/nrows + 1) / 2)) * nrows,
+                grid='Y'
+            ),
+            grid='Y')
+    )[1]
 
 
-    # [~, colPosXmat] = meshgrid(zeros(Dx*Dy,1), colPosX); % 81x9
-    # [~, colPosYmat] = meshgrid(zeros(Dx*Dy,1), colPosY);
+    # Calculate values for every point
+    # -m1 + j + 29 - dx(i) -> - inner_window + outer_window
+    # Add +1 to compensate 0 index matrix
+    # Center of the matrix - point with maximum value
+    center_row, center_column = np.unravel_index(rdf.argmax(), rdf.shape)
 
+    # TODO is it really the center_row to be added?
+    val_x = mt.vectorize_matrix((m_c_pos_x - m_dx - m_pos_x + center_row + 1).T)
+    # TODO is it really the center_column to be added?
+    val_y = mt.vectorize_matrix((m_c_pos_y - m_dy - m_pos_y + center_column + 1).T)
 
-    # % Deslocamento externo (par de for)
-    # % Matriz interna (pequena) - Varia nas linhas da matriz P
-    # posX = 1:Dx;
-    # posY = 1:Dy;
-    #
-    # meioX = fix((Dx + 1)/2);
-    # meioY = fix((Dy + 1)/2);
-    #
-    # posX = posX - meioX;
-    # posY = posY - meioY;
-    #
-    # [posXvec, ~] = meshgrid(posX);
-    # [~, posYvec] = meshgrid(posY);
-    #
-    # posXvec = reshape(posXvec, 1, size(posXvec,1)*size(posXvec,2));
-    # posYvec = reshape(posYvec, 1, size(posYvec,1)*size(posYvec,2));
-    #
-    # % Matriz pequena, sem centralizar
-    # [posXmat, ~] = meshgrid(posXvec, zeros(K,1));
-    # [posYmat, ~] = meshgrid(posYvec, zeros(K,1));
-    #
-    # % Descolamento interno (trinca de for)
-    #
-    # % 1º for - Deslocamento
-    #     % 2º for - Matrix pequena deslocando nas colunas da grande
-    # % 3º for - Matrix pequena deslocando nas linhas da grande
-    #
-    # % Etapa de deslocamento
-    # [vec_dx ~] = meshgrid(dx, 1:K/ni);
-    # [vec_dy ~] = meshgrid(dy, 1:K/ni);
-    #
-    # vec_dx = reshape(vec_dx, size(vec_dx,1)*size(vec_dx,2), 1); % 81x1
-    # vec_dy = reshape(vec_dy, size(vec_dy,1)*size(vec_dy,2), 1);
-    #
-    # [~, mat_dx] = meshgrid(zeros(Dx*Dy,1), vec_dx); % 81x9
-    # [~, mat_dy] = meshgrid(zeros(Dx*Dy,1), vec_dy);
-    #
-    # % Colunas e linhas de
-    # posWinX = 1:Wx/Dx;
-    # posWinY = 1:Wy/Dy;
-    #
-    # centroX = fix((Wx/Dx + 1)/2);
-    # centroY = fix((Wy/Dy + 1)/2);
-    #
-    # posWinX = (posWinX - centroX)*Dx;
-    # posWinY = (posWinY - centroY)*Dy;
-    #
-    # [posWinXvec, ~] = meshgrid(posWinX); % 3x3
-    # [~, posWinYvec] = meshgrid(posWinY);
-    #
-    # posWinXvec = reshape(posWinXvec, size(posWinXvec,1)*size(posWinXvec,2), 1); % 9x1
-    # posWinYvec = reshape(posWinYvec, size(posWinYvec,1)*size(posWinYvec,2), 1);
-    #
-    # [~, colPosX] = meshgrid(zeros(ni,1), posWinXvec); % 9x9
-    # [~, colPosY] = meshgrid(zeros(ni,1), posWinYvec);
-    #
-    # colPosX = reshape(colPosX, size(colPosX,1)*size(colPosX,2), 1); % 81x1
-    # colPosY = reshape(colPosY, size(colPosY,1)*size(colPosY,2), 1);
-    #
-    # [~, colPosXmat] = meshgrid(zeros(Dx*Dy,1), colPosX); % 81x9
-    # [~, colPosYmat] = meshgrid(zeros(Dx*Dy,1), colPosY);
+    # Calculate positions using rdf as a vector
+    # Subtract 1 to normalize to 0 index
+    positions = (rdf.shape[0] * (val_x - 1) + val_y).astype(int) - 1
+    rdf_v = mt.vectorize_matrix(rdf)
 
+    return np.reshape(rdf_v[positions], (k, nrows * ncols), order='F')
 
 def bw_single_image(img):
     if len(img.shape) == 3:
@@ -335,7 +279,7 @@ def bw_single_image(img):
     k = (num_imgs * wx * wy) / (lx * ly)
     p = nc * nl     # number of pixels in R
 
-    return _calculate_r(rff, dx, dy, wx, wy, nrows, ncols)
+    return _calculate_p(rdf, dx, dy, wx, wy, nrows, ncols)
 
 
 
